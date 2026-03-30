@@ -66,6 +66,19 @@ function parseCSVCli(text, filename) {
   document.getElementById('btnCliConfirm').style.display = '';
   document.getElementById('cliFileInfo').textContent = '👥 ' + filename + ' — ' + cliRows.length + ' registros encontrados';
 
+  function buildCliRow(f) {
+    var opts = [''].concat(cliHeaders).map(function(h) {
+      return '<option value="' + h + '"' + (cliMapping[f.key] === h ? ' selected' : '') + '>' + (h || '— Não importar —') + '</option>';
+    }).join('');
+    var exVal = cliMapping[f.key] ? (example[cliMapping[f.key]] || '') : '';
+    var selId = 'csel_' + f.key;
+    var exId = 'cex_' + f.key;
+    return '<tr style="border-bottom:1px solid var(--border)">' +
+      '<td style="padding:8px 10px;font-weight:500">' + f.label + (f.required ? '<span style="color:var(--red)"> *</span>' : '') + '</td>' +
+      '<td style="padding:6px 10px"><select id="' + selId + '" data-field="' + f.key + '" onchange="onCliColChange(this)" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:inherit">' + opts + '</select></td>' +
+      '<td style="padding:8px 10px;font-size:12px;color:var(--text3);font-family:monospace" id="' + exId + '">' + exVal + '</td>' +
+      '</tr>';
+  }
   const CLI_FIELDS = [
     { key:'cpf',          label:'CPF / CNPJ',        required:false },
     { key:'nome',         label:'Nome completo',      required:true  },
@@ -78,17 +91,7 @@ function parseCSVCli(text, filename) {
   ];
 
   const example = cliRows[0] || {};
-  document.getElementById('cliMappingBody').innerHTML = CLI_FIELDS.map(f => {
-    const opts = ['', ...cliHeaders].map(h =>
-      '<option value="' + h + '" ' + (cliMapping[f.key] === h ? 'selected' : '') + '>' + (h || '— Não importar —') + '</option>'
-    ).join('');
-    const exVal = cliMapping[f.key] ? (example[cliMapping[f.key]] || '') : '';
-    return '<tr style="border-bottom:1px solid var(--border)">' +
-      '<td style="padding:8px 10px;font-weight:500">' + f.label + (f.required ? '<span style="color:var(--red)"> *</span>' : '') + '</td>' +
-      '<td style="padding:6px 10px"><select onchange="cliMapping['' + f.key + '']=this.value;document.getElementById('cex_' + f.key + '').textContent=this.value?(cliRows[0]||{})[this.value]||'':'';" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:inherit">' + opts + '</select></td>' +
-      '<td style="padding:8px 10px;font-size:12px;color:var(--text3);font-family:monospace" id="cex_' + f.key + '">' + exVal + '</td>' +
-      '</tr>';
-  }).join('');
+    document.getElementById('cliMappingBody').innerHTML = CLI_FIELDS.map(buildCliRow).join('');
 }
 
 function parseDateBR(str) {
@@ -100,6 +103,13 @@ function parseDateBR(str) {
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
   return null;
+}
+
+function onCliColChange(sel) {
+  var field = sel.getAttribute('data-field');
+  cliMapping[field] = sel.value;
+  var exEl = document.getElementById('cex_' + field);
+  if (exEl) exEl.textContent = sel.value ? ((cliRows[0] || {})[sel.value] || '') : '';
 }
 
 async function confirmImportCli() {
@@ -157,9 +167,12 @@ async function confirmImportCli() {
     '</div>' +
     '<div style="font-size:13px;color:var(--text2)">Próximo passo: importe as apólices para vincular aos clientes.</div>' +
     '</div>';
-  document.getElementById('cliFooter').innerHTML =
-    '<button class="btn btn-primary" onclick="closeModal('modalImportClientes');resetImportCli();renderClients()">Concluir</button>';
+  document.getElementById('cliFooter').innerHTML = '<button class="btn btn-primary" onclick="fecharImportCli()">Concluir</button>';
 }
+
+
+function fecharImportCli() { closeModal('modalImportClientes'); resetImportCli(); renderClients(); }
+function cancelarImportCli() { closeModal('modalImportClientes'); resetImportCli(); }
 
 function resetImportCli() {
   cliRows = []; cliMapping = {}; cliHeaders = [];
@@ -168,9 +181,7 @@ function resetImportCli() {
   document.getElementById('cliStep3').style.display = 'none';
   document.getElementById('btnCliConfirm').style.display = 'none';
   const fi = document.getElementById('cliFile'); if (fi) fi.value = '';
-  document.getElementById('cliFooter').innerHTML =
-    '<button class="btn btn-ghost" onclick="closeModal('modalImportClientes');resetImportCli()">Cancelar</button>' +
-    '<button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>';
+  document.getElementById('cliFooter').innerHTML = '<button class="btn btn-ghost" onclick="cancelarImportCli()">Cancelar</button><button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>';
 }
 
 </script>
@@ -1554,17 +1565,7 @@ function parseCSVCli(text, filename) {
   ];
 
   const example = cliRows[0] || {};
-  document.getElementById('cliMappingBody').innerHTML = CLI_FIELDS.map(f => {
-    const opts = ['', ...cliHeaders].map(h =>
-      '<option value="' + h + '" ' + (cliMapping[f.key] === h ? 'selected' : '') + '>' + (h || '— Não importar —') + '</option>'
-    ).join('');
-    const exVal = cliMapping[f.key] ? (example[cliMapping[f.key]] || '') : '';
-    return '<tr style="border-bottom:1px solid var(--border)">' +
-      '<td style="padding:8px 10px;font-weight:500">' + f.label + (f.required ? '<span style="color:var(--red)"> *</span>' : '') + '</td>' +
-      '<td style="padding:6px 10px"><select onchange="cliMapping['' + f.key + '']=this.value;document.getElementById('cex_' + f.key + '').textContent=this.value?(cliRows[0]||{})[this.value]||'':'';" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:inherit">' + opts + '</select></td>' +
-      '<td style="padding:8px 10px;font-size:12px;color:var(--text3);font-family:monospace" id="cex_' + f.key + '">' + exVal + '</td>' +
-      '</tr>';
-  }).join('');
+  document.getElementById('cliMappingBody').innerHTML =   document.getElementById('cliMappingBody').innerHTML = CLI_FIELDS.map(buildCliRow).join('');
 }
 
 function parseDateBR(str) {
@@ -1633,9 +1634,12 @@ async function confirmImportCli() {
     '</div>' +
     '<div style="font-size:13px;color:var(--text2)">Próximo passo: importe as apólices para vincular aos clientes.</div>' +
     '</div>';
-  document.getElementById('cliFooter').innerHTML =
-    '<button class="btn btn-primary" onclick="closeModal('modalImportClientes');resetImportCli();renderClients()">Concluir</button>';
+  document.getElementById('cliFooter').innerHTML = '<button class="btn btn-primary" onclick="fecharImportCli()">Concluir</button>';
 }
+
+
+function fecharImportCli() { closeModal('modalImportClientes'); resetImportCli(); renderClients(); }
+function cancelarImportCli() { closeModal('modalImportClientes'); resetImportCli(); }
 
 function resetImportCli() {
   cliRows = []; cliMapping = {}; cliHeaders = [];
@@ -1644,9 +1648,7 @@ function resetImportCli() {
   document.getElementById('cliStep3').style.display = 'none';
   document.getElementById('btnCliConfirm').style.display = 'none';
   const fi = document.getElementById('cliFile'); if (fi) fi.value = '';
-  document.getElementById('cliFooter').innerHTML =
-    '<button class="btn btn-ghost" onclick="closeModal('modalImportClientes');resetImportCli()">Cancelar</button>' +
-    '<button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>';
+  document.getElementById('cliFooter').innerHTML = '<button class="btn btn-ghost" onclick="cancelarImportCli()">Cancelar</button><button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>';
 }
 
 </script>
