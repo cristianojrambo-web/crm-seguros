@@ -326,6 +326,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
       <button class="nav-btn" onclick="goTo('clientes',this)">Clientes</button>
       <button class="nav-btn" onclick="goTo('agenda',this)">Agenda</button>
       <button class="nav-btn" onclick="goTo('mensagens',this)">Mensagens</button>
+      <button class="nav-btn" onclick="goTo('apolices',this)">Apólices</button>
       <button class="nav-btn gestor-only" onclick="goTo('config',this)" style="display:none">Config.</button>
     </nav>
     <div class="topbar-right">
@@ -390,21 +391,55 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
     <div class="section" id="sec-clientes">
       <div class="pipeline-header">
         <div class="page-title">Clientes</div>
-        <button class="btn btn-primary btn-sm" onclick="openModal('modalCliente')">+ Novo Cliente</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="openModal('modalImportClientes')">⬆ Importar Clientes</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modalCliente')">+ Novo Cliente</button>
+        </div>
       </div>
       <div class="toolbar">
         <div class="search-wrap">
           <span class="search-icon">🔍</span>
           <input type="text" placeholder="Buscar por nome, telefone ou e-mail..." oninput="filterClients(this.value)"/>
         </div>
-        <select style="padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-sm);font-family:inherit;font-size:13px;background:var(--surface)" onchange="filterClientsTipo(this.value)">
-          <option value="">Todos os tipos</option>
+
+      </div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>Nome</th><th>Telefone</th><th>E-mail</th><th>Nascimento</th><th>Profissão</th><th>Corretor</th></tr></thead>
+        <tbody id="clientsBody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ── APÓLICES ── -->
+    <div class="section" id="sec-apolices">
+      <div class="pipeline-header">
+        <div>
+          <div class="page-title">Apólices</div>
+          <div class="page-sub">Todas as apólices cadastradas dos seus clientes</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="openModal('modalImportApolices')">⬆ Importar Apólices</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modalNovaApolice')">+ Nova Apólice</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="Buscar por cliente, apólice ou seguradora..." oninput="filterApolices(this.value)"/>
+        </div>
+        <select id="filterRamo" style="padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-sm);font-family:inherit;font-size:13px;background:var(--surface)" onchange="filterApolices(document.querySelector('.search-wrap input').value)">
+          <option value="">Todos os ramos</option>
           <option>Auto</option><option>Vida</option><option>Residencial</option><option>Empresarial</option>
+        </select>
+        <select id="filterStatus" style="padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-sm);font-family:inherit;font-size:13px;background:var(--surface)" onchange="filterApolices(document.querySelector('.search-wrap input').value)">
+          <option value="">Todos os status</option>
+          <option value="ativa">Ativa</option>
+          <option value="vencendo">Vencendo em 30d</option>
+          <option value="vencida">Vencida</option>
         </select>
       </div>
       <div class="tbl-wrap">
-        <table><thead><tr><th>Nome</th><th>Telefone</th><th>Tipo</th><th>Vencimento</th><th>Corretor</th></tr></thead>
-        <tbody id="clientsBody"></tbody></table>
+        <table><thead><tr><th>Cliente</th><th>Apólice</th><th>Seguradora</th><th>Ramo</th><th>Início</th><th>Fim</th><th>Prêmio</th><th>Status</th></tr></thead>
+        <tbody id="apolicesBody"></tbody></table>
       </div>
     </div>
 
@@ -514,10 +549,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
     <div class="field"><label>E-mail</label><input type="email" id="cEmail"/></div>
   </div>
   <div class="form-row">
-    <div class="field"><label>Tipo</label><select id="cTipo"><option>Auto</option><option>Vida</option><option>Residencial</option><option>Empresarial</option></select></div>
-    <div class="field"><label>Vencimento</label><input type="date" id="cVenc"/></div>
+    <div class="field"><label>Data de nascimento</label><input type="date" id="cNasc"/></div>
+    <div class="field"><label>Estado civil</label>
+      <select id="cEstCivil">
+        <option value="">— Selecione —</option>
+        <option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option>
+        <option>Viúvo(a)</option><option>União estável</option>
+      </select>
+    </div>
   </div>
-  <div class="field"><label>Endereço</label><input id="cEnd" placeholder="Rua, número, cidade"/></div>
+  <div class="form-row">
+    <div class="field"><label>Profissão</label><input id="cProfissao" placeholder="Ex: Médico, Empresário..."/></div>
+    <div class="field"><label>Endereço</label><input id="cEnd" placeholder="Rua, número, cidade"/></div>
+  </div>
   <div class="modal-foot">
     <button class="btn btn-ghost" onclick="closeModal('modalCliente')">Cancelar</button>
     <button class="btn btn-primary" onclick="saveCliente()">Salvar</button>
@@ -562,19 +606,132 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 </div>
 </div>
 
-<!-- IMPORT CSV -->
-<div class="overlay" id="modalImport">
-<div class="modal">
-  <div class="modal-head"><div class="modal-title">Importar Renovações (CSV)</div><button class="modal-close" onclick="closeModal('modalImport')">✕</button></div>
-  <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Colunas esperadas: <strong>nome, telefone, email, tipo, vencimento, bem</strong></p>
-  <div class="drop-zone" onclick="document.getElementById('csvFile').click()">
-    <div style="font-size:28px;margin-bottom:8px">📄</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Clique para selecionar o arquivo CSV</div>
-    <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="importCSV(this)"/>
-    <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();document.getElementById('csvFile').click()">Selecionar arquivo</button>
+<!-- IMPORT CLIENTES -->
+<div class="overlay" id="modalImportClientes">
+<div class="modal modal-lg">
+  <div class="modal-head"><div class="modal-title">Importar Clientes (CSV)</div><button class="modal-close" onclick="closeModal('modalImportClientes');resetImportCli()">✕</button></div>
+
+  <!-- STEP 1 -->
+  <div id="cliStep1">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Importe sua planilha de clientes. O sistema detecta automaticamente as colunas e evita duplicatas pelo CPF.</p>
+    <div class="drop-zone" onclick="document.getElementById('cliFile').click()" ondragover="event.preventDefault()" ondrop="handleDropCli(event)">
+      <div style="font-size:32px;margin-bottom:8px">👥</div>
+      <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px">Arraste o arquivo ou clique para selecionar</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Suporta .csv (exporte do Excel como CSV)</div>
+      <input type="file" id="cliFile" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleImportCliFile(this)"/>
+      <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();document.getElementById('cliFile').click()">Selecionar arquivo</button>
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--r-sm);padding:12px;font-size:12px;color:var(--text2)">
+      <strong>Colunas reconhecidas automaticamente:</strong> CPF/CNPJ, Nome, Telefone, E-mail, Nascimento, Endereço, Profissão, Estado Civil
+    </div>
   </div>
-  <div id="importResult"></div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('modalImport')">Fechar</button></div>
+
+  <!-- STEP 2: Mapeamento -->
+  <div id="cliStep2" style="display:none">
+    <div style="font-size:14px;font-weight:600;margin-bottom:4px" id="cliFileInfo"></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Confirme o mapeamento das colunas detectadas:</div>
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--surface2)">
+          <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Campo do sistema</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Coluna do arquivo</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Exemplo</th>
+        </tr></thead>
+        <tbody id="cliMappingBody"></tbody>
+      </table>
+    </div>
+    <div style="background:var(--blue-bg);border:1px solid #b0c8f0;border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--blue)">
+      Clientes com CPF já cadastrado serão <strong>atualizados</strong>, não duplicados.
+    </div>
+  </div>
+
+  <!-- STEP 3: Resultado -->
+  <div id="cliStep3" style="display:none">
+    <div id="cliResult3"></div>
+  </div>
+
+  <div class="modal-foot" id="cliFooter">
+    <button class="btn btn-ghost" onclick="closeModal('modalImportClientes');resetImportCli()">Cancelar</button>
+    <button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>
+  </div>
+</div>
+</div>
+
+<!-- IMPORT APÓLICES -->
+<div class="overlay" id="modalImportApolices">
+<div class="modal modal-lg">
+  <div class="modal-head"><div class="modal-title">Importar Apólices (Excel / CSV)</div><button class="modal-close" onclick="closeModal('modalImportApolices')">✕</button></div>
+
+  <!-- STEP 1: Upload -->
+  <div id="importStep1">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Importe seu relatório mensal. O sistema detecta automaticamente as colunas e cria clientes + apólices.</p>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('importFile').click()" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
+      <div style="font-size:32px;margin-bottom:8px">📊</div>
+      <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px">Arraste o arquivo ou clique para selecionar</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Suporta .xlsx, .xls e .csv</div>
+      <input type="file" id="importFile" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleImportFile(this)"/>
+      <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();document.getElementById('importFile').click()">Selecionar arquivo</button>
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--r-sm);padding:12px;font-size:12px;color:var(--text2)">
+      <strong>Colunas reconhecidas automaticamente:</strong> CPF/CNPJ, Nome, Apólice, Seguradora, Ramo, Início Vigência, Fim Vigência, Prêmio
+    </div>
+  </div>
+
+  <!-- STEP 2: Mapeamento de colunas -->
+  <div id="importStep2" style="display:none">
+    <div style="font-size:14px;font-weight:600;margin-bottom:4px" id="importFileInfo"></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Confirme o mapeamento das colunas detectadas:</div>
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--surface2)">
+          <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Campo do sistema</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Coluna do arquivo</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Exemplo</th>
+        </tr></thead>
+        <tbody id="mappingBody"></tbody>
+      </table>
+    </div>
+    <div style="background:var(--amber-bg);border:1px solid #e0c060;border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:14px" id="importWarning" style="display:none"></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:6px">Apólices que vencem em até <strong>90 dias</strong> entram automaticamente no pipeline de Renovações.</div>
+  </div>
+
+  <!-- STEP 3: Resultado -->
+  <div id="importStep3" style="display:none">
+    <div id="importResult3"></div>
+  </div>
+
+  <div class="modal-foot" id="importFooter">
+    <button class="btn btn-ghost" onclick="closeModal('modalImportApolices');resetImport()">Cancelar</button>
+    <button class="btn btn-primary" id="btnImportConfirm" onclick="confirmImport()" style="display:none">Importar agora</button>
+  </div>
+</div>
+</div>
+
+<!-- NOVA APÓLICE MANUAL -->
+<div class="overlay" id="modalNovaApolice">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">Nova Apólice</div><button class="modal-close" onclick="closeModal('modalNovaApolice')">✕</button></div>
+  <div class="field"><label>Cliente *</label>
+    <select id="apCliente"><option value="">— Selecione o cliente —</option></select>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Número da Apólice</label><input id="apNumero" placeholder="517720256R310667704"/></div>
+    <div class="field"><label>Seguradora *</label><input id="apSeguradora" placeholder="Allianz, Icatu, HDI..."/></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Ramo *</label>
+      <select id="apRamo"><option>Auto</option><option>Vida</option><option>Residencial</option><option>Empresarial</option></select>
+    </div>
+    <div class="field"><label>Prêmio (R$)</label><input type="number" id="apPremio" placeholder="2218.20" step="0.01"/></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Início vigência *</label><input type="date" id="apInicio"/></div>
+    <div class="field"><label>Fim vigência *</label><input type="date" id="apFim"/></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-ghost" onclick="closeModal('modalNovaApolice')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveApolice()">Salvar apólice</button>
+  </div>
 </div>
 </div>
 
@@ -598,6 +755,13 @@ let leads = [];
 let clientes = [];
 let tarefas = [];
 let currentLeadId = null;
+let apolices = [];
+let importRows = [];
+let cliRows = [];
+let cliMapping = {};
+let cliHeaders = [];
+let importMapping = {};
+let importHeaders = [];
 let modalLeadPipeline = 'venda';
 
 let stagesVenda  = ['Lead Novo','Primeiro Contato','Proposta Enviada','Follow Up 1','Follow Up 2','Follow Up 3','Em Negociação','Emitido','Perdido'];
@@ -683,14 +847,16 @@ async function loadProfile() {
 }
 
 async function loadAll() {
-  const [l, c, t] = await Promise.all([
+  const [l, c, t, a] = await Promise.all([
     sb.from('leads').select('*').order('created_at', { ascending: false }),
     sb.from('clientes').select('*').order('created_at', { ascending: false }),
     sb.from('atividades').select('*').order('agendado_para', { ascending: true }),
+    sb.from('apolices').select('*').order('fim_vigencia', { ascending: true }),
   ]);
   if (l.data) leads = l.data;
   if (c.data) clientes = c.data;
   if (t.data) tarefas = t.data;
+  if (a.data) apolices = a.data;
 
   // Stages do banco
   const { data: stgs } = await sb.from('pipeline_stages').select('*').order('ordem');
@@ -788,6 +954,7 @@ function goTo(sec, btn) {
   document.getElementById('sec-' + sec).classList.add('active');
   if (btn) btn.classList.add('active');
   if (sec === 'clientes') renderClients();
+  if (sec === 'apolices') renderApolices();
   if (sec === 'mensagens') renderTemplates();
   if (sec === 'config') renderConfig();
   if (sec === 'agenda') renderAgenda();
@@ -949,8 +1116,9 @@ function renderClients(filter = '', tipo = '') {
   body.innerHTML = list.map(c => `<tr>
     <td><div class="td-name">${c.nome}</div><div style="font-size:11px;color:var(--text3)">${c.documento||''}</div></td>
     <td class="td-mono">${c.telefone||'—'}</td>
-    <td><span class="badge ${TIPO_BADGE[c.tipo]||'b-gray'}">${tipoIcon(c.tipo)} ${c.tipo}</span></td>
-    <td><span class="badge ${vencBadge(c.vencimento)}">${formatDate(c.vencimento)}</span></td>
+    <td style="color:var(--text2);font-size:12px">${c.email||'—'}</td>
+    <td style="color:var(--text2);font-size:12px">${c.nascimento ? formatDate(c.nascimento) : '—'}</td>
+    <td style="color:var(--text2);font-size:12px">${c.profissao||'—'}</td>
     <td style="color:var(--text2);font-size:12px">${getCorretorNome(c.corretor_id)}</td>
   </tr>`).join('');
 }
@@ -1249,7 +1417,7 @@ async function saveCliente() {
   const nome = document.getElementById('cNome').value.trim();
   const tel  = document.getElementById('cTel').value.trim();
   if (!nome || !tel) { showToast('Nome e telefone são obrigatórios'); return; }
-  const cli = { nome, telefone: tel, documento: document.getElementById('cDoc').value, email: document.getElementById('cEmail').value, tipo: document.getElementById('cTipo').value, vencimento: document.getElementById('cVenc').value || null, endereco: document.getElementById('cEnd').value, corretor_id: currentProfile.id, created_at: new Date().toISOString() };
+  const cli = { nome, telefone: tel, documento: document.getElementById('cDoc').value, email: document.getElementById('cEmail').value, nascimento: document.getElementById('cNasc').value || null, estado_civil: document.getElementById('cEstCivil').value, profissao: document.getElementById('cProfissao').value, endereco: document.getElementById('cEnd').value, corretor_id: currentProfile.id, created_at: new Date().toISOString() };
   if (DEMO_MODE) { cli.id = 'c_'+Date.now(); clientes.unshift(cli); }
   else { const { data } = await sb.from('clientes').insert(cli).select().single(); if (data) clientes.unshift(data); }
   closeModal('modalCliente');
@@ -1257,29 +1425,489 @@ async function saveCliente() {
   showToast(`Cliente "${nome}" cadastrado!`);
 }
 
-// ══════════ IMPORT CSV ══════════
-function importCSV(input) {
-  const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const lines = e.target.result.split('\n').filter(l => l.trim());
-    let count = 0;
-    for (const line of lines.slice(1)) {
-      const [nome,telefone,email,tipo,vencimento,bem] = line.split(',').map(s => s.trim().replace(/"/g,''));
-      if (!nome) continue;
-      const lead = { nome, telefone:telefone||'', email:email||'', tipo:tipo||'Auto', vencimento:vencimento||null, bem:bem||'', stage:'Importado', pipeline:'renovacao', corretor_id:currentProfile.id, observacoes:'Importado via CSV', created_at:new Date().toISOString() };
-      if (DEMO_MODE) { lead.id='imp_'+Date.now()+count; leads.unshift(lead); }
-      else { const { data } = await sb.from('leads').insert(lead).select().single(); if (data) leads.unshift(data); }
-      count++;
+// ══════════ APÓLICES ══════════
+function renderApolices(filter = '') {
+  const ramo   = document.getElementById('filterRamo')?.value || '';
+  const status = document.getElementById('filterStatus')?.value || '';
+  let list = DEMO_MODE ? apolices : apolices;
+  if (filter) { const f = filter.toLowerCase(); list = list.filter(a => (a.numero||'').toLowerCase().includes(f) || (a.seguradora||'').toLowerCase().includes(f) || getClienteNome(a.cliente_id).toLowerCase().includes(f)); }
+  if (ramo)   list = list.filter(a => a.ramo === ramo);
+  if (status === 'ativa')    list = list.filter(a => diasAteVencer(a.fim_vigencia) > 30);
+  if (status === 'vencendo') list = list.filter(a => { const d = diasAteVencer(a.fim_vigencia); return d !== null && d >= 0 && d <= 30; });
+  if (status === 'vencida')  list = list.filter(a => diasAteVencer(a.fim_vigencia) < 0);
+  const body = document.getElementById('apolicesBody');
+  if (!body) return;
+  if (!list.length) { body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:36px;color:var(--text3)">Nenhuma apólice encontrada</td></tr>`; return; }
+  body.innerHTML = list.map(a => {
+    const dias = diasAteVencer(a.fim_vigencia);
+    const sb2  = dias === null ? 'b-gray' : dias < 0 ? 'b-red' : dias <= 30 ? 'b-amber' : 'b-green';
+    const statusLabel = dias === null ? '—' : dias < 0 ? 'Vencida' : dias <= 30 ? `Vence em ${dias}d` : 'Ativa';
+    return `<tr>
+      <td class="td-name">${getClienteNome(a.cliente_id)}</td>
+      <td class="td-mono" style="font-size:11px">${a.numero||'—'}</td>
+      <td style="color:var(--text2)">${a.seguradora||'—'}</td>
+      <td><span class="badge ${TIPO_BADGE[a.ramo]||'b-gray'}">${tipoIcon(a.ramo)} ${a.ramo}</span></td>
+      <td class="td-mono">${formatDate(a.inicio_vigencia)}</td>
+      <td class="td-mono">${formatDate(a.fim_vigencia)}</td>
+      <td style="font-weight:500">R$ ${Number(a.premio||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td><span class="badge ${sb2}">${statusLabel}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function getClienteNome(id) {
+  const c = clientes.find(x => x.id === id);
+  return c ? c.nome : '—';
+}
+
+function filterApolices(v) { renderApolices(v); }
+
+async function saveApolice() {
+  const clienteId = document.getElementById('apCliente').value;
+  const seguradora = document.getElementById('apSeguradora').value.trim();
+  const inicio = document.getElementById('apInicio').value;
+  const fim    = document.getElementById('apFim').value;
+  if (!clienteId || !seguradora || !inicio || !fim) { showToast('Preencha os campos obrigatórios'); return; }
+  const ap = { cliente_id: clienteId, numero: document.getElementById('apNumero').value, seguradora, ramo: document.getElementById('apRamo').value, inicio_vigencia: inicio, fim_vigencia: fim, premio: parseFloat(document.getElementById('apPremio').value)||0, corretor_id: currentProfile.id, status: 'ativa', created_at: new Date().toISOString() };
+  if (DEMO_MODE) { ap.id = 'ap_'+Date.now(); apolices.push(ap); }
+  else { const { data } = await sb.from('apolices').insert(ap).select().single(); if (data) apolices.push(data); }
+  // Auto-criar lead renovação se vence em 90 dias
+  const dias = diasAteVencer(fim);
+  if (dias !== null && dias <= 90) await autoCreateRenovLead(ap, getClienteNome(clienteId));
+  closeModal('modalNovaApolice');
+  renderApolices();
+  showToast('Apólice salva!');
+}
+
+async function autoCreateRenovLead(apolice, nomeCliente) {
+  const lead = { nome: nomeCliente, telefone: '', email: '', tipo: apolice.ramo, bem: `Apólice ${apolice.seguradora} - ${apolice.numero||''}`, vencimento: apolice.fim_vigencia, stage: 'Importado', pipeline: 'renovacao', corretor_id: currentProfile.id, observacoes: `Importado automaticamente. Prêmio atual: R$ ${Number(apolice.premio||0).toFixed(2)}`, created_at: new Date().toISOString() };
+  if (DEMO_MODE) { lead.id = 'ren_'+Date.now(); leads.unshift(lead); }
+  else { const { data } = await sb.from('leads').insert(lead).select().single(); if (data) leads.unshift(data); }
+}
+
+// ══════════ IMPORTAÇÃO INTELIGENTE ══════════
+// ══════════ IMPORTAÇÃO DE CLIENTES ══════════
+const CLI_FIELD_ALIASES = {
+  cpf:         ['cpf','cnpj','cpf/cnpj','documento','doc','cpf cnpj','cpfcnpj'],
+  nome:        ['nome','nome completo','nome civil','nome civil segurado','cliente','razão social','razao social','segurado','nome do cliente'],
+  telefone:    ['telefone','celular','fone','tel','whatsapp','phone','contato','telefone celular','cel'],
+  email:       ['email','e-mail','correio','mail'],
+  nascimento:  ['nascimento','data nascimento','data de nascimento','dt nascimento','dt nasc','nasc'],
+  endereco:    ['endereço','endereco','end','logradouro','rua','residência','residencia'],
+  profissao:   ['profissão','profissao','ocupação','ocupacao','cargo','atividade'],
+  estado_civil:['estado civil','estadocivil','estado_civil','civil','estado'],
+};
+
+function detectCliColumn(headers, fieldKey) {
+  const aliases = CLI_FIELD_ALIASES[fieldKey];
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i].toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 /]/g,'');
+    for (const alias of aliases) {
+      const a = alias.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 /]/g,'');
+      if (h === a || h.includes(a) || a.includes(h)) return i;
     }
-    document.getElementById('importResult').innerHTML = `<div style="background:var(--accent-bg);border:1px solid #b8ddc9;border-radius:var(--r-sm);padding:11px;font-size:13px;color:var(--accent)">${count} registros importados com sucesso!</div>`;
-    renderKanban('renovacao'); renderDashboard();
-  };
-  reader.readAsText(file);
+  }
+  return -1;
+}
+
+function handleDropCli(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) processImportCliFile(file);
+}
+
+function handleImportCliFile(input) {
+  const file = input.files[0];
+  if (file) processImportCliFile(file);
+}
+
+function processImportCliFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => parseCSVCli(e.target.result, file.name);
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSVCli(text, filename) {
+  const firstLine = text.split('
+')[0];
+  const delim = firstLine.includes(';') ? ';' : ',';
+  const lines = text.split('
+').map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) { showToast('Arquivo vazio ou inválido'); return; }
+
+  cliHeaders = lines[0].split(delim).map(h => h.replace(/"/g,'').trim());
+  cliRows = lines.slice(1).map(line => {
+    const cols = line.split(delim).map(c => c.replace(/"/g,'').trim());
+    const row = {};
+    cliHeaders.forEach((h, i) => row[h] = cols[i] || '');
+    return row;
+  }).filter(r => Object.values(r).some(v => v));
+
+  cliMapping = {};
+  Object.keys(CLI_FIELD_ALIASES).forEach(field => {
+    const idx = detectCliColumn(cliHeaders, field);
+    cliMapping[field] = idx >= 0 ? cliHeaders[idx] : '';
+  });
+
+  showCliMappingStep(filename);
+}
+
+function showCliMappingStep(filename) {
+  document.getElementById('cliStep1').style.display = 'none';
+  document.getElementById('cliStep2').style.display = '';
+  document.getElementById('btnCliConfirm').style.display = '';
+  document.getElementById('cliFileInfo').textContent = `👥 ${filename} — ${cliRows.length} registros encontrados`;
+
+  const fields = [
+    { key:'cpf',          label:'CPF / CNPJ',      required: false },
+    { key:'nome',         label:'Nome completo',    required: true  },
+    { key:'telefone',     label:'Telefone / Celular', required: false },
+    { key:'email',        label:'E-mail',           required: false },
+    { key:'nascimento',   label:'Data de nascimento', required: false },
+    { key:'endereco',     label:'Endereço',         required: false },
+    { key:'profissao',    label:'Profissão',        required: false },
+    { key:'estado_civil', label:'Estado civil',     required: false },
+  ];
+
+  const example = cliRows[0] || {};
+  document.getElementById('cliMappingBody').innerHTML = fields.map(f => {
+    const opts = ['', ...cliHeaders].map(h => `<option value="${h}" ${cliMapping[f.key]===h?'selected':''}>${h||'— Não importar —'}</option>`).join('');
+    const exampleVal = cliMapping[f.key] ? (example[cliMapping[f.key]]||'') : '';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 10px;font-weight:500;font-size:13px">${f.label}${f.required?'<span style="color:var(--red)"> *</span>':''}</td>
+      <td style="padding:6px 10px"><select onchange="cliMapping['${f.key}']=this.value;updateCliExample('${f.key}',this.value)" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:inherit">${opts}</select></td>
+      <td style="padding:8px 10px;font-size:12px;color:var(--text3);font-family:'DM Mono',monospace" id="cex_${f.key}">${exampleVal}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateCliExample(field, col) {
+  const example = cliRows[0] || {};
+  document.getElementById('cex_'+field).textContent = col ? (example[col]||'') : '';
+}
+
+async function confirmImportCli() {
+  if (!cliMapping.nome) { showToast('Mapeie pelo menos o campo Nome'); return; }
+  const btn = document.getElementById('btnCliConfirm');
+  btn.disabled = true; btn.textContent = 'Importando...';
+
+  let criados = 0, atualizados = 0, erros = 0;
+
+  for (const row of cliRows) {
+    try {
+      const nome = row[cliMapping.nome]?.trim();
+      if (!nome) continue;
+
+      const cpf       = cliMapping.cpf         ? row[cliMapping.cpf]?.replace(/[^\d]/g,'')  : '';
+      const telefone  = cliMapping.telefone     ? row[cliMapping.telefone]?.trim()            : '';
+      const email     = cliMapping.email        ? row[cliMapping.email]?.trim()               : '';
+      const nascimento= cliMapping.nascimento   ? parseDate(row[cliMapping.nascimento])       : null;
+      const endereco  = cliMapping.endereco     ? row[cliMapping.endereco]?.trim()            : '';
+      const profissao = cliMapping.profissao    ? row[cliMapping.profissao]?.trim()           : '';
+      const est_civil = cliMapping.estado_civil ? row[cliMapping.estado_civil]?.trim()        : '';
+
+      const payload = { nome, documento: cpf||null, telefone, email, nascimento, endereco, profissao, estado_civil: est_civil, corretor_id: currentProfile.id };
+
+      // Verificar duplicata por CPF
+      let existing = null;
+      if (cpf) existing = clientes.find(c => (c.documento||'').replace(/[^\d]/g,'') === cpf);
+      if (!existing) existing = clientes.find(c => c.nome.toLowerCase().trim() === nome.toLowerCase().trim());
+
+      if (existing) {
+        // Atualizar
+        if (!DEMO_MODE) await sb.from('clientes').update(payload).eq('id', existing.id);
+        Object.assign(existing, payload);
+        atualizados++;
+      } else {
+        // Criar
+        payload.created_at = new Date().toISOString();
+        if (DEMO_MODE) { payload.id = 'c_imp_'+Date.now()+'_'+criados; clientes.push({...payload}); }
+        else { const { data } = await sb.from('clientes').insert(payload).select().single(); if (data) clientes.push(data); }
+        criados++;
+      }
+    } catch(e) { erros++; }
+  }
+
+  document.getElementById('cliStep2').style.display = 'none';
+  document.getElementById('cliStep3').style.display = '';
+  document.getElementById('cliResult3').innerHTML = `
+    <div style="text-align:center;padding:16px 0">
+      <div style="font-size:40px;margin-bottom:12px">✅</div>
+      <div style="font-size:18px;font-weight:600;color:var(--text);margin-bottom:16px">Importação concluída!</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:var(--accent-bg);border-radius:var(--r-sm);padding:12px">
+          <div style="font-size:24px;font-weight:600;color:var(--accent)">${criados}</div>
+          <div style="font-size:12px;color:var(--accent)">Clientes criados</div>
+        </div>
+        <div style="background:var(--blue-bg);border-radius:var(--r-sm);padding:12px">
+          <div style="font-size:24px;font-weight:600;color:var(--blue)">${atualizados}</div>
+          <div style="font-size:12px;color:var(--blue)">Clientes atualizados</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--r-sm);padding:12px">
+          <div style="font-size:24px;font-weight:600;color:var(--text2)">${erros}</div>
+          <div style="font-size:12px;color:var(--text3)">Linhas ignoradas</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--text2)">Agora importe as apólices na aba <strong>Apólices</strong> para vincular aos clientes.</div>
+    </div>`;
+  document.getElementById('cliFooter').innerHTML = `<button class="btn btn-primary" onclick="closeModal('modalImportClientes');resetImportCli();renderClients()">Concluir</button>`;
+}
+
+function resetImportCli() {
+  cliRows = []; cliMapping = {}; cliHeaders = [];
+  document.getElementById('cliStep1').style.display = '';
+  document.getElementById('cliStep2').style.display = 'none';
+  document.getElementById('cliStep3').style.display = 'none';
+  document.getElementById('btnCliConfirm').style.display = 'none';
+  const fi = document.getElementById('cliFile'); if(fi) fi.value = '';
+  document.getElementById('cliFooter').innerHTML = `<button class="btn btn-ghost" onclick="closeModal('modalImportClientes');resetImportCli()">Cancelar</button><button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>`;
+}
+
+const FIELD_ALIASES = {
+  cpf:      ['cpf','cnpj','cpf/cnpj','documento','doc','cpf cnpj'],
+  nome:     ['nome','nome civil','nome civil segurado','cliente','razão social','razao social','segurado'],
+  numero:   ['apólice','apolice','número apólice','numero apolice','nº apólice','no apolice','apólice'],
+  seguradora:['seguradora','seg','cia','companhia'],
+  ramo:     ['ramo','tipo','modalidade','produto'],
+  inicio:   ['início vigência','inicio vigencia','início vig','inicio vig','início','vigência inicial','inicio de vigência'],
+  fim:      ['fim vigência','fim vigencia','fim vig','final vig','final vigência','vencimento','término','termino'],
+  premio:   ['prêmio','premio','prêmio líquido','premio liquido','totalpr','valor','prêmio total','premio total'],
+};
+
+function detectColumn(headers, fieldKey) {
+  const aliases = FIELD_ALIASES[fieldKey];
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i].toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const hClean = h.replace(/[^a-z0-9 /]/g,'');
+    for (const alias of aliases) {
+      const aClean = alias.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 /]/g,'');
+      if (hClean === aClean || hClean.includes(aClean) || aClean.includes(hClean)) return i;
+    }
+  }
+  return -1;
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+}
+
+function handleImportFile(input) {
+  const file = input.files[0];
+  if (file) processImportFile(file);
+}
+
+function processImportFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'csv') {
+    const reader = new FileReader();
+    reader.onload = e => parseCSVImport(e.target.result, file.name);
+    reader.readAsText(file, 'UTF-8');
+  } else {
+    showToast('Por favor exporte como CSV (.csv) e tente novamente');
+  }
+}
+
+function parseCSVImport(text, filename) {
+  // Detect delimiter
+  const firstLine = text.split('\n')[0];
+  const delim = firstLine.includes(';') ? ';' : ',';
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) { showToast('Arquivo vazio ou inválido'); return; }
+
+  // Parse headers
+  importHeaders = lines[0].split(delim).map(h => h.replace(/"/g,'').trim());
+  
+  // Parse rows
+  importRows = lines.slice(1).map(line => {
+    const cols = line.split(delim).map(c => c.replace(/"/g,'').trim());
+    const row = {};
+    importHeaders.forEach((h, i) => row[h] = cols[i] || '');
+    return row;
+  }).filter(r => Object.values(r).some(v => v));
+
+  // Auto-detect mapping
+  importMapping = {};
+  Object.keys(FIELD_ALIASES).forEach(field => {
+    const idx = detectColumn(importHeaders, field);
+    importMapping[field] = idx >= 0 ? importHeaders[idx] : '';
+  });
+
+  showMappingStep(filename);
+}
+
+function showMappingStep(filename) {
+  document.getElementById('importStep1').style.display = 'none';
+  document.getElementById('importStep2').style.display = '';
+  document.getElementById('btnImportConfirm').style.display = '';
+  document.getElementById('importFileInfo').textContent = `📊 ${filename} — ${importRows.length} registros encontrados`;
+
+  const fields = [
+    { key:'cpf',        label:'CPF / CNPJ',        required: false },
+    { key:'nome',       label:'Nome do cliente',    required: true  },
+    { key:'numero',     label:'Número da apólice',  required: false },
+    { key:'seguradora', label:'Seguradora',         required: true  },
+    { key:'ramo',       label:'Ramo',               required: true  },
+    { key:'inicio',     label:'Início vigência',    required: false },
+    { key:'fim',        label:'Fim vigência',       required: true  },
+    { key:'premio',     label:'Prêmio (R$)',        required: false },
+  ];
+
+  const example = importRows[0] || {};
+  document.getElementById('mappingBody').innerHTML = fields.map(f => {
+    const opts = ['', ...importHeaders].map(h => `<option value="${h}" ${importMapping[f.key]===h?'selected':''}>${h||'— Não importar —'}</option>`).join('');
+    const exampleVal = importMapping[f.key] ? (example[importMapping[f.key]]||'') : '';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 10px;font-weight:500;font-size:13px">${f.label}${f.required?'<span style="color:var(--red)"> *</span>':''}</td>
+      <td style="padding:6px 10px"><select onchange="importMapping['${f.key}']=this.value;updateExample('${f.key}',this.value)" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:inherit">${opts}</select></td>
+      <td style="padding:8px 10px;font-size:12px;color:var(--text3);font-family:'DM Mono',monospace" id="ex_${f.key}">${exampleVal}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateExample(field, col) {
+  const example = importRows[0] || {};
+  document.getElementById('ex_'+field').textContent = col ? (example[col]||'') : '';
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  str = str.trim();
+  // DD/MM/YYYY or DD/MM/YY
+  if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(str)) {
+    const [d,m,y] = str.split('/');
+    const year = y.length === 2 ? '20'+y : y;
+    return `${year}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  return null;
+}
+
+function parsePremio(str) {
+  if (!str) return 0;
+  return parseFloat(str.replace(/[R$\s.]/g,'').replace(',','.')) || 0;
+}
+
+function normalizeRamo(str) {
+  if (!str) return 'Auto';
+  const s = str.toLowerCase();
+  if (s.includes('auto') || s.includes('automóvel') || s.includes('veiculo') || s.includes('veículo')) return 'Auto';
+  if (s.includes('vida') || s.includes('individual')) return 'Vida';
+  if (s.includes('resid')) return 'Residencial';
+  if (s.includes('empr') || s.includes('empresa') || s.includes('rco') || s.includes('frota')) return 'Empresarial';
+  return 'Auto';
+}
+
+async function confirmImport() {
+  if (!importMapping.nome) { showToast('Mapeie pelo menos o campo Nome'); return; }
+  if (!importMapping.fim)  { showToast('Mapeie o campo Fim Vigência'); return; }
+
+  const btn = document.getElementById('btnImportConfirm');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+
+  let criados = 0, apolicesCriadas = 0, renovsCriadas = 0, erros = 0;
+
+  for (const row of importRows) {
+    try {
+      const nome = row[importMapping.nome]?.trim();
+      if (!nome) continue;
+
+      const cpf  = importMapping.cpf ? row[importMapping.cpf]?.replace(/[^\d]/g,'') : '';
+      const fim  = parseDate(importMapping.fim ? row[importMapping.fim] : '');
+      const inicio = parseDate(importMapping.inicio ? row[importMapping.inicio] : '');
+      const seg  = importMapping.seguradora ? row[importMapping.seguradora]?.trim() : '';
+      const ramo = normalizeRamo(importMapping.ramo ? row[importMapping.ramo] : '');
+      const num  = importMapping.numero ? row[importMapping.numero]?.trim() : '';
+      const prem = parsePremio(importMapping.premio ? row[importMapping.premio] : '');
+
+      // Verificar se cliente já existe pelo CPF ou nome
+      let clienteId = null;
+      if (cpf) {
+        const existing = clientes.find(c => (c.documento||'').replace(/[^\d]/g,'') === cpf);
+        if (existing) clienteId = existing.id;
+      }
+      if (!clienteId) {
+        const existingName = clientes.find(c => c.nome.toLowerCase() === nome.toLowerCase());
+        if (existingName) clienteId = existingName.id;
+      }
+
+      // Criar cliente se não existe
+      if (!clienteId) {
+        const newCli = { nome, documento: cpf || null, telefone: '', email: '', corretor_id: currentProfile.id, created_at: new Date().toISOString() };
+        if (DEMO_MODE) {
+          newCli.id = 'c_imp_'+Date.now()+'_'+criados;
+          clientes.push(newCli);
+          clienteId = newCli.id;
+        } else {
+          const { data: cliData } = await sb.from('clientes').insert(newCli).select().single();
+          if (cliData) { clientes.push(cliData); clienteId = cliData.id; }
+        }
+        criados++;
+      }
+
+      // Criar apólice
+      const ap = { cliente_id: clienteId, numero: num, seguradora: seg, ramo, inicio_vigencia: inicio, fim_vigencia: fim, premio: prem, corretor_id: currentProfile.id, status: 'ativa', created_at: new Date().toISOString() };
+      if (DEMO_MODE) { ap.id = 'ap_imp_'+Date.now()+'_'+apolicesCriadas; apolices.push(ap); }
+      else { const { data: apData } = await sb.from('apolices').insert(ap).select().single(); if (apData) apolices.push(apData); }
+      apolicesCriadas++;
+
+      // Auto-criar lead renovação se vence em 90 dias
+      const dias = diasAteVencer(fim);
+      if (dias !== null && dias <= 90 && dias >= -30) {
+        await autoCreateRenovLead(ap, nome);
+        renovsCriadas++;
+      }
+    } catch(e) { erros++; }
+  }
+
+  // Mostrar resultado
+  document.getElementById('importStep2').style.display = 'none';
+  document.getElementById('importStep3').style.display = '';
+  document.getElementById('importResult3').innerHTML = `
+    <div style="text-align:center;padding:16px 0">
+      <div style="font-size:40px;margin-bottom:12px">✅</div>
+      <div style="font-size:18px;font-weight:600;color:var(--text);margin-bottom:16px">Importação concluída!</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:var(--accent-bg);border-radius:var(--r-sm);padding:12px">
+          <div style="font-size:24px;font-weight:600;color:var(--accent)">${criados}</div>
+          <div style="font-size:12px;color:var(--accent)">Clientes criados</div>
+        </div>
+        <div style="background:var(--blue-bg);border-radius:var(--r-sm);padding:12px">
+          <div style="font-size:24px;font-weight:600;color:var(--blue)">${apolicesCriadas}</div>
+          <div style="font-size:12px;color:var(--blue)">Apólices importadas</div>
+        </div>
+        <div style="background:var(--amber-bg);border-radius:var(--r-sm);padding:12px">
+          <div style="font-size:24px;font-weight:600;color:var(--amber)">${renovsCriadas}</div>
+          <div style="font-size:12px;color:var(--amber)">Leads de renovação criados</div>
+        </div>
+      </div>
+      ${erros > 0 ? `<div style="font-size:12px;color:var(--text3)">${erros} linhas ignoradas (dados inválidos)</div>` : ''}
+    </div>`;
+  document.getElementById('importFooter').innerHTML = `<button class="btn btn-primary" onclick="closeModal('modalImportApolices');resetImport();renderApolices();renderKanban('renovacao');renderDashboard()">Concluir</button>`;
+  renderDashboard();
+}
+
+function resetImport() {
+  importRows = []; importMapping = {}; importHeaders = [];
+  document.getElementById('importStep1').style.display = '';
+  document.getElementById('importStep2').style.display = 'none';
+  document.getElementById('importStep3').style.display = 'none';
+  document.getElementById('btnImportConfirm').style.display = 'none';
+  document.getElementById('importFile').value = '';
+  document.getElementById('importFooter').innerHTML = `<button class="btn btn-ghost" onclick="closeModal('modalImportApolices');resetImport()">Cancelar</button><button class="btn btn-primary" id="btnImportConfirm" onclick="confirmImport()" style="display:none">Importar agora</button>`;
 }
 
 // ══════════ UTILS ══════════
-function openModal(id) { document.getElementById(id).classList.add('open'); }
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'modalNovaApolice') {
+    const sel = document.getElementById('apCliente');
+    sel.innerHTML = '<option value="">— Selecione o cliente —</option>' + clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  }
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function showToast(msg) {
   const t = document.getElementById('toast');
