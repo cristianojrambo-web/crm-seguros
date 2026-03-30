@@ -78,7 +78,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .btn-danger{background:var(--red-bg);color:var(--red);border:1px solid #f0c0c0}
 .btn-sm{padding:6px 11px;font-size:12px}
 .btn-icon{padding:7px;border-radius:var(--r-sm)}
-.auth-err{background:var(--red-bg);color:var(--red);border:1px solid #f0c0c0;border-radius:var(--r-sm);padding:10px 12px;font-size:13px;margin-bottom:14px;display:none}
+.auth-err{background:var(--blue-bg);color:var(--blue);border:1px solid #b0c8f0;border-radius:var(--r-sm);padding:10px 12px;font-size:13px;margin-bottom:14px;display:none}
 
 /* ── APP ── */
 #app{display:none;min-height:100vh;flex-direction:column}
@@ -939,8 +939,28 @@ async function doLogin() {
   const pass  = document.getElementById('lgPass').value;
   if (!email || !pass) { showAuthErr('Preencha e-mail e senha'); return; }
   setLoading('btnLogin', true);
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) { showAuthErr('E-mail ou senha incorretos'); setLoading('btnLogin', false); }
+  showAuthErr('Conectando ao servidor...');
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (error) {
+      showAuthErr('Erro: ' + error.message);
+      setLoading('btnLogin', false);
+      return;
+    }
+    if (data?.user) {
+      showAuthErr('Login OK! Carregando dados...');
+      currentUser = data.user;
+      try { await loadProfile(); } catch(e) { currentProfile = { id: data.user.id, nome: data.user.email, role: 'corretor' }; }
+      try { await loadAll(); } catch(e) { console.warn(e); }
+      startApp();
+    } else {
+      showAuthErr('Resposta inesperada do servidor. Tente novamente.');
+      setLoading('btnLogin', false);
+    }
+  } catch(e) {
+    showAuthErr('Falha de conexão: ' + e.message);
+    setLoading('btnLogin', false);
+  }
 }
 
 async function doSignup() {
@@ -959,10 +979,19 @@ async function doSignup() {
   setLoading('btnSignup', false);
 }
 
-function showAuthErr(msg) {
+function showAuthErr(msg, isError) {
   const el = document.getElementById('authErr');
   el.textContent = msg;
   el.style.display = 'block';
+  if (isError) {
+    el.style.background = 'var(--red-bg)';
+    el.style.color = 'var(--red)';
+    el.style.borderColor = '#f0c0c0';
+  } else {
+    el.style.background = 'var(--blue-bg)';
+    el.style.color = 'var(--blue)';
+    el.style.borderColor = '#b0c8f0';
+  }
 }
 
 function setLoading(btnId, loading) {
