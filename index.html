@@ -827,57 +827,19 @@ if (DEMO_MODE) {
 
 // ══════════ SUPABASE AUTH ══════════
 async function initSupabase() {
-  // Botão de emergência aparece após 3s
-  const fallbackTimer = setTimeout(() => {
-    const btn = document.getElementById('btnFallback');
-    if (btn) btn.style.display = '';
-  }, 3000);
-
-  // Timeout total de 8s
-  const safetyTimer = setTimeout(() => {
-    clearTimeout(fallbackTimer);
-    showAuth();
-  }, 8000);
-
+  // Apenas verifica se já existe sessão ativa
   try {
-    let session = null;
-    try {
-      const res = await sb.auth.getSession();
-      session = res.data?.session || null;
-    } catch(e) {
-      console.warn('getSession falhou:', e.message);
-    }
-
-    clearTimeout(safetyTimer);
-    clearTimeout(fallbackTimer);
-
+    const res = await sb.auth.getSession();
+    const session = res.data?.session || null;
     if (session && session.user) {
       currentUser = session.user;
-      try { await loadProfile(); } catch(e) { console.warn('loadProfile:', e.message); currentProfile = { id: session.user.id, nome: session.user.email, role: 'corretor' }; }
-      try { await loadAll(); } catch(e) { console.warn('loadAll:', e.message); }
+      try { await loadProfile(); } catch(e) { currentProfile = { id: session.user.id, nome: session.user.email, role: 'corretor' }; }
+      try { await loadAll(); } catch(e) {}
       startApp();
-    } else {
-      showAuth();
+      return;
     }
-  } catch(e) {
-    clearTimeout(safetyTimer);
-    clearTimeout(fallbackTimer);
-    console.error('initSupabase erro:', e);
-    showAuth();
-  }
-
-  try {
-    sb.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        currentUser = session.user;
-        try { await loadProfile(); } catch(e) { currentProfile = { id: session.user.id, nome: session.user.email, role: 'corretor' }; }
-        try { await loadAll(); } catch(e) {}
-        startApp();
-      } else if (event === 'SIGNED_OUT') {
-        showAuth();
-      }
-    });
   } catch(e) {}
+  showAuth();
 }
 
 async function loadProfile() {
@@ -937,29 +899,55 @@ function switchAuthTab(tab, btn) {
 async function doLogin() {
   const email = document.getElementById('lgEmail').value.trim();
   const pass  = document.getElementById('lgPass').value;
-  if (!email || !pass) { showAuthErr('Preencha e-mail e senha'); return; }
-  setLoading('btnLogin', true);
-  showAuthErr('Conectando ao servidor...');
+  if (!email || !pass) { showAuthErr('Preencha e-mail e senha', true); return; }
+
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+  showAuthErr('Verificando credenciais...', false);
+
   try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
-    if (error) {
-      showAuthErr('Erro: ' + error.message);
-      setLoading('btnLogin', false);
+    const result = await sb.auth.signInWithPassword({ email, password: pass });
+
+    if (result.error) {
+      showAuthErr('❌ ' + result.error.message, true);
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
       return;
     }
-    if (data?.user) {
-      showAuthErr('Login OK! Carregando dados...');
-      currentUser = data.user;
-      try { await loadProfile(); } catch(e) { currentProfile = { id: data.user.id, nome: data.user.email, role: 'corretor' }; }
-      try { await loadAll(); } catch(e) { console.warn(e); }
-      startApp();
-    } else {
-      showAuthErr('Resposta inesperada do servidor. Tente novamente.');
-      setLoading('btnLogin', false);
+
+    const user = result.data?.user;
+    if (!user) {
+      showAuthErr('❌ Nenhum usuário retornado. Tente novamente.', true);
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+      return;
     }
+
+    showAuthErr('✓ Autenticado! Carregando dados...', false);
+    currentUser = user;
+
+    try {
+      const { data: prof } = await sb.from('profiles').select('*').eq('id', user.id).single();
+      currentProfile = prof || { id: user.id, nome: user.email, role: 'corretor' };
+    } catch(e) {
+      currentProfile = { id: user.id, nome: user.email, role: 'corretor' };
+    }
+
+    try {
+      const { data: profiles } = await sb.from('profiles').select('*');
+      if (profiles) profiles.forEach(p => allProfiles[p.id] = p);
+    } catch(e) {}
+
+    try { await loadAll(); } catch(e) {}
+
+    showAuthErr('✓ Tudo pronto! Abrindo sistema...', false);
+    setTimeout(() => startApp(), 400);
+
   } catch(e) {
-    showAuthErr('Falha de conexão: ' + e.message);
-    setLoading('btnLogin', false);
+    showAuthErr('❌ Erro de conexão: ' + e.message, true);
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
   }
 }
 
@@ -1001,8 +989,10 @@ function setLoading(btnId, loading) {
 }
 
 async function logout() {
-  if (!DEMO_MODE) await sb.auth.signOut();
-  else showAuth();
+  try { await sb.auth.signOut(); } catch(e) {}
+  currentUser = null; currentProfile = null;
+  leads = []; clientes = []; tarefas = []; apolices = [];
+  showAuth();
 }
 
 function showAuth() {
