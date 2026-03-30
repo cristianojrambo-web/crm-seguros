@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CRM Seguros</title>
+<script>
+// Garante que showAuth existe antes do Supabase carregar
+window.addEventListener('error', function(e) {
+  if (e.message && (e.message.includes('supabase') || e.message.includes('Cannot read'))) {
+    var ls = document.getElementById('loadingScreen');
+    var as = document.getElementById('authScreen');
+    if (ls) ls.style.display = 'none';
+    if (as) as.style.display = 'flex';
+  }
+}, true);
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -277,6 +288,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
   <div style="width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:4px">🛡️</div>
   <div class="spinner"></div>
   <div style="font-size:13px;color:var(--text3)">Carregando CRM Seguros...</div>
+  <button id="btnFallback" onclick="showAuth()" style="display:none;margin-top:16px;padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit">Ir para o login</button>
 </div>
 
 <!-- ══════════════ AUTH ══════════════ -->
@@ -815,40 +827,57 @@ if (DEMO_MODE) {
 
 // ══════════ SUPABASE AUTH ══════════
 async function initSupabase() {
-  // Timeout de segurança — se travar por mais de 6s vai para o login
+  // Botão de emergência aparece após 3s
+  const fallbackTimer = setTimeout(() => {
+    const btn = document.getElementById('btnFallback');
+    if (btn) btn.style.display = '';
+  }, 3000);
+
+  // Timeout total de 8s
   const safetyTimer = setTimeout(() => {
-    console.warn('Timeout — redirecionando para login');
+    clearTimeout(fallbackTimer);
     showAuth();
-  }, 6000);
+  }, 8000);
 
   try {
-    const { data: { session }, error } = await sb.auth.getSession();
+    let session = null;
+    try {
+      const res = await sb.auth.getSession();
+      session = res.data?.session || null;
+    } catch(e) {
+      console.warn('getSession falhou:', e.message);
+    }
+
     clearTimeout(safetyTimer);
-    if (error) { showAuth(); return; }
-    if (session) {
+    clearTimeout(fallbackTimer);
+
+    if (session && session.user) {
       currentUser = session.user;
-      await loadProfile();
-      await loadAll();
+      try { await loadProfile(); } catch(e) { console.warn('loadProfile:', e.message); currentProfile = { id: session.user.id, nome: session.user.email, role: 'corretor' }; }
+      try { await loadAll(); } catch(e) { console.warn('loadAll:', e.message); }
       startApp();
     } else {
       showAuth();
     }
   } catch(e) {
     clearTimeout(safetyTimer);
-    console.error('Erro ao conectar Supabase:', e);
+    clearTimeout(fallbackTimer);
+    console.error('initSupabase erro:', e);
     showAuth();
   }
 
-  sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session) {
-      currentUser = session.user;
-      await loadProfile();
-      await loadAll();
-      startApp();
-    } else if (event === 'SIGNED_OUT') {
-      showAuth();
-    }
-  });
+  try {
+    sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        currentUser = session.user;
+        try { await loadProfile(); } catch(e) { currentProfile = { id: session.user.id, nome: session.user.email, role: 'corretor' }; }
+        try { await loadAll(); } catch(e) {}
+        startApp();
+      } else if (event === 'SIGNED_OUT') {
+        showAuth();
+      }
+    });
+  } catch(e) {}
 }
 
 async function loadProfile() {
