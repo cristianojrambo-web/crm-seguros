@@ -815,15 +815,30 @@ if (DEMO_MODE) {
 
 // ══════════ SUPABASE AUTH ══════════
 async function initSupabase() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    currentUser = session.user;
-    await loadProfile();
-    await loadAll();
-    startApp();
-  } else {
+  // Timeout de segurança — se travar por mais de 6s vai para o login
+  const safetyTimer = setTimeout(() => {
+    console.warn('Timeout — redirecionando para login');
+    showAuth();
+  }, 6000);
+
+  try {
+    const { data: { session }, error } = await sb.auth.getSession();
+    clearTimeout(safetyTimer);
+    if (error) { showAuth(); return; }
+    if (session) {
+      currentUser = session.user;
+      await loadProfile();
+      await loadAll();
+      startApp();
+    } else {
+      showAuth();
+    }
+  } catch(e) {
+    clearTimeout(safetyTimer);
+    console.error('Erro ao conectar Supabase:', e);
     showAuth();
   }
+
   sb.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
       currentUser = session.user;
@@ -847,29 +862,39 @@ async function loadProfile() {
 }
 
 async function loadAll() {
-  const [l, c, t, a] = await Promise.all([
-    sb.from('leads').select('*').order('created_at', { ascending: false }),
-    sb.from('clientes').select('*').order('created_at', { ascending: false }),
-    sb.from('atividades').select('*').order('agendado_para', { ascending: true }),
-    sb.from('apolices').select('*').order('fim_vigencia', { ascending: true }),
-  ]);
-  if (l.data) leads = l.data;
-  if (c.data) clientes = c.data;
-  if (t.data) tarefas = t.data;
-  if (a.data) apolices = a.data;
+  try {
+    const [l, c, t, a] = await Promise.all([
+      sb.from('leads').select('*').order('created_at', { ascending: false }),
+      sb.from('clientes').select('*').order('created_at', { ascending: false }),
+      sb.from('atividades').select('*').order('agendado_para', { ascending: true }),
+      sb.from('apolices').select('*').order('fim_vigencia', { ascending: true }),
+    ]);
+    if (l.data) leads = l.data;
+    if (c.data) clientes = c.data;
+    if (t.data) tarefas = t.data;
+    if (a.data) apolices = a.data;
+  } catch(e) {
+    console.warn('Erro ao carregar dados — tabelas podem não existir ainda:', e.message);
+  }
 
   // Stages do banco
-  const { data: stgs } = await sb.from('pipeline_stages').select('*').order('ordem');
-  if (stgs) {
-    stagesVenda = stgs.filter(s => s.pipeline === 'venda').map(s => s.nome);
-    stagesRenov = stgs.filter(s => s.pipeline === 'renovacao').map(s => s.nome);
+  try {
+    const { data: stgs } = await sb.from('pipeline_stages').select('*').order('ordem');
+    if (stgs && stgs.length > 0) {
+      stagesVenda = stgs.filter(s => s.pipeline === 'venda').map(s => s.nome);
+      stagesRenov = stgs.filter(s => s.pipeline === 'renovacao').map(s => s.nome);
+    }
+  } catch(e) {
+    console.warn('Tabela pipeline_stages não encontrada — usando padrão');
   }
 
   // Realtime
-  sb.channel('leads_changes').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, async () => {
-    const { data } = await sb.from('leads').select('*').order('created_at', { ascending: false });
-    if (data) { leads = data; renderKanban('venda'); renderKanban('renovacao'); renderDashboard(); }
-  }).subscribe();
+  try {
+    sb.channel('leads_changes').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, async () => {
+      const { data } = await sb.from('leads').select('*').order('created_at', { ascending: false });
+      if (data) { leads = data; renderKanban('venda'); renderKanban('renovacao'); renderDashboard(); }
+    }).subscribe();
+  } catch(e) {}
 }
 
 function switchAuthTab(tab, btn) {
