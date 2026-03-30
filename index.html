@@ -304,15 +304,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
       <div class="field"><label>Nome completo</label><input type="text" id="sgNome" placeholder="Seu nome"/></div>
       <div class="field"><label>E-mail</label><input type="email" id="sgEmail" placeholder="seu@email.com"/></div>
       <div class="field"><label>Senha</label><input type="password" id="sgPass" placeholder="mínimo 6 caracteres"/></div>
-      <div class="field"><label>Perfil</label>
-        <select id="sgRole"><option value="corretor">Corretor</option><option value="gestor">Gestor</option></select>
-      </div>
+
       <button class="btn btn-primary btn-full" id="btnSignup" onclick="doSignup()">Criar conta</button>
     </div>
 
-    <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:16px">
-      ⚙️ Configure suas credenciais do Supabase no topo do arquivo JS
-    </p>
+
   </div>
 </div>
 
@@ -731,7 +727,7 @@ async function doSignup() {
   const nome  = document.getElementById('sgNome').value.trim();
   const email = document.getElementById('sgEmail').value.trim();
   const pass  = document.getElementById('sgPass').value;
-  const role  = document.getElementById('sgRole').value;
+  const role  = 'corretor';
   if (!nome || !email || !pass) { showAuthErr('Preencha todos os campos'); return; }
   setLoading('btnSignup', true);
   const { data, error } = await sb.auth.signUp({ email, password: pass });
