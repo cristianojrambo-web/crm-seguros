@@ -4,7 +4,176 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CRM Seguros</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+// ══════════ IMPORTAÇÃO DE CLIENTES ══════════
+let cliRows = [], cliMapping = {}, cliHeaders = [];
+
+const CLI_ALIASES = {
+  cpf:          ['cpf','cnpj','cpf/cnpj','documento','doc'],
+  nome:         ['nome','nome completo','nome civil','nome civil segurado','cliente','segurado','razao social','razão social'],
+  telefone:     ['telefone','celular','fone','tel','whatsapp','phone'],
+  email:        ['email','e-mail','mail'],
+  nascimento:   ['nascimento','data nascimento','data de nascimento','dt nasc','nasc'],
+  endereco:     ['endereço','endereco','end','logradouro','rua'],
+  profissao:    ['profissão','profissao','ocupação','ocupacao','cargo'],
+  estado_civil: ['estado civil','estadocivil','civil'],
+};
+
+function detectCliCol(headers, field) {
+  const aliases = CLI_ALIASES[field];
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i].toLowerCase().trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9 /]/g,'');
+    for (const alias of aliases) {
+      const a = alias.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 /]/g,'');
+      if (h === a || h.includes(a) || a.includes(h)) return i;
+    }
+  }
+  return -1;
+}
+
+function handleImportCliFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => parseCSVCli(e.target.result, file.name);
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSVCli(text, filename) {
+  const firstLine = text.split('\n')[0];
+  const delim = firstLine.includes(';') ? ';' : ',';
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) { showToast('Arquivo vazio ou inválido'); return; }
+  cliHeaders = lines[0].split(delim).map(h => h.replace(/"/g,'').trim());
+  cliRows = lines.slice(1).map(line => {
+    const cols = line.split(delim).map(c => c.replace(/"/g,'').trim());
+    const row = {};
+    cliHeaders.forEach((h, i) => row[h] = cols[i] || '');
+    return row;
+  }).filter(r => Object.values(r).some(v => v));
+
+  cliMapping = {};
+  Object.keys(CLI_ALIASES).forEach(field => {
+    const idx = detectCliCol(cliHeaders, field);
+    cliMapping[field] = idx >= 0 ? cliHeaders[idx] : '';
+  });
+
+  // Show step 2
+  document.getElementById('cliStep1').style.display = 'none';
+  document.getElementById('cliStep2').style.display = '';
+  document.getElementById('btnCliConfirm').style.display = '';
+  document.getElementById('cliFileInfo').textContent = '👥 ' + filename + ' — ' + cliRows.length + ' registros encontrados';
+
+  const CLI_FIELDS = [
+    { key:'cpf',          label:'CPF / CNPJ',        required:false },
+    { key:'nome',         label:'Nome completo',      required:true  },
+    { key:'telefone',     label:'Telefone / Celular', required:false },
+    { key:'email',        label:'E-mail',             required:false },
+    { key:'nascimento',   label:'Data de nascimento', required:false },
+    { key:'endereco',     label:'Endereço',           required:false },
+    { key:'profissao',    label:'Profissão',          required:false },
+    { key:'estado_civil', label:'Estado civil',       required:false },
+  ];
+
+  const example = cliRows[0] || {};
+  document.getElementById('cliMappingBody').innerHTML = CLI_FIELDS.map(f => {
+    const opts = ['', ...cliHeaders].map(h =>
+      '<option value="' + h + '" ' + (cliMapping[f.key] === h ? 'selected' : '') + '>' + (h || '— Não importar —') + '</option>'
+    ).join('');
+    const exVal = cliMapping[f.key] ? (example[cliMapping[f.key]] || '') : '';
+    return '<tr style="border-bottom:1px solid var(--border)">' +
+      '<td style="padding:8px 10px;font-weight:500">' + f.label + (f.required ? '<span style="color:var(--red)"> *</span>' : '') + '</td>' +
+      '<td style="padding:6px 10px"><select onchange="cliMapping['' + f.key + '']=this.value;document.getElementById('cex_' + f.key + '').textContent=this.value?(cliRows[0]||{})[this.value]||'':'';" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:inherit">' + opts + '</select></td>' +
+      '<td style="padding:8px 10px;font-size:12px;color:var(--text3);font-family:monospace" id="cex_' + f.key + '">' + exVal + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function parseDateBR(str) {
+  if (!str) return null;
+  str = str.trim();
+  if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(str)) {
+    const [d,m,y] = str.split('/');
+    return (y.length===2?'20'+y:y) + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0');
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  return null;
+}
+
+async function confirmImportCli() {
+  if (!cliMapping.nome) { showToast('Mapeie pelo menos o campo Nome'); return; }
+  const btn = document.getElementById('btnCliConfirm');
+  btn.disabled = true; btn.textContent = 'Importando...';
+
+  let criados = 0, atualizados = 0, erros = 0;
+
+  for (const row of cliRows) {
+    try {
+      const nome = (row[cliMapping.nome] || '').trim();
+      if (!nome) continue;
+      const cpf = cliMapping.cpf ? row[cliMapping.cpf].replace(/[^\d]/g,'') : '';
+      const payload = {
+        nome,
+        documento: cpf || null,
+        telefone:    cliMapping.telefone     ? row[cliMapping.telefone]?.trim()    : '',
+        email:       cliMapping.email        ? row[cliMapping.email]?.trim()       : '',
+        nascimento:  cliMapping.nascimento   ? parseDateBR(row[cliMapping.nascimento]) : null,
+        endereco:    cliMapping.endereco     ? row[cliMapping.endereco]?.trim()    : '',
+        profissao:   cliMapping.profissao    ? row[cliMapping.profissao]?.trim()   : '',
+        estado_civil:cliMapping.estado_civil ? row[cliMapping.estado_civil]?.trim(): '',
+        corretor_id: currentProfile.id,
+      };
+
+      // Check duplicate by CPF or name
+      let existing = null;
+      if (cpf) existing = clientes.find(c => (c.documento||'').replace(/[^\d]/g,'') === cpf && cpf.length > 5);
+      if (!existing) existing = clientes.find(c => c.nome.toLowerCase().trim() === nome.toLowerCase().trim());
+
+      if (existing) {
+        if (!DEMO_MODE) await sb.from('clientes').update(payload).eq('id', existing.id);
+        Object.assign(existing, payload);
+        atualizados++;
+      } else {
+        payload.created_at = new Date().toISOString();
+        if (DEMO_MODE) { payload.id = 'c_' + Date.now() + '_' + criados; clientes.push({...payload}); }
+        else { const { data } = await sb.from('clientes').insert(payload).select().single(); if (data) clientes.push(data); }
+        criados++;
+      }
+    } catch(e) { erros++; }
+  }
+
+  document.getElementById('cliStep2').style.display = 'none';
+  document.getElementById('cliStep3').style.display = '';
+  document.getElementById('cliResult3').innerHTML =
+    '<div style="text-align:center;padding:16px 0">' +
+    '<div style="font-size:40px;margin-bottom:12px">✅</div>' +
+    '<div style="font-size:18px;font-weight:600;margin-bottom:16px">Importação concluída!</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">' +
+    '<div style="background:var(--accent-bg);border-radius:var(--r-sm);padding:12px"><div style="font-size:24px;font-weight:600;color:var(--accent)">' + criados + '</div><div style="font-size:12px;color:var(--accent)">Criados</div></div>' +
+    '<div style="background:var(--blue-bg);border-radius:var(--r-sm);padding:12px"><div style="font-size:24px;font-weight:600;color:var(--blue)">' + atualizados + '</div><div style="font-size:12px;color:var(--blue)">Atualizados</div></div>' +
+    '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:12px"><div style="font-size:24px;font-weight:600;color:var(--text2)">' + erros + '</div><div style="font-size:12px;color:var(--text3)">Ignorados</div></div>' +
+    '</div>' +
+    '<div style="font-size:13px;color:var(--text2)">Próximo passo: importe as apólices para vincular aos clientes.</div>' +
+    '</div>';
+  document.getElementById('cliFooter').innerHTML =
+    '<button class="btn btn-primary" onclick="closeModal('modalImportClientes');resetImportCli();renderClients()">Concluir</button>';
+}
+
+function resetImportCli() {
+  cliRows = []; cliMapping = {}; cliHeaders = [];
+  document.getElementById('cliStep1').style.display = '';
+  document.getElementById('cliStep2').style.display = 'none';
+  document.getElementById('cliStep3').style.display = 'none';
+  document.getElementById('btnCliConfirm').style.display = 'none';
+  const fi = document.getElementById('cliFile'); if (fi) fi.value = '';
+  document.getElementById('cliFooter').innerHTML =
+    '<button class="btn btn-ghost" onclick="closeModal('modalImportClientes');resetImportCli()">Cancelar</button>' +
+    '<button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>';
+}
+
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -391,7 +560,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
     <div class="section" id="sec-clientes">
       <div class="pipeline-header">
         <div class="page-title">Clientes</div>
-        <button class="btn btn-primary btn-sm" onclick="openModal('modalCliente')">+ Novo Cliente</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="openModal('modalImportClientes')">⬆ Importar Clientes</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modalCliente')">+ Novo Cliente</button>
+        </div>
       </div>
       <div class="toolbar">
         <div class="search-wrap">
@@ -1308,6 +1480,222 @@ document.getElementById('modalTarefa').addEventListener('click', () => {
     sel.innerHTML = '<option value="">— Nenhum —</option>' + getMyLeads().map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
   }
 });
+
+// ══════════ IMPORTAÇÃO DE CLIENTES ══════════
+let cliRows = [], cliMapping = {}, cliHeaders = [];
+
+const CLI_ALIASES = {
+  cpf:          ['cpf','cnpj','cpf/cnpj','documento','doc'],
+  nome:         ['nome','nome completo','nome civil','nome civil segurado','cliente','segurado','razao social','razão social'],
+  telefone:     ['telefone','celular','fone','tel','whatsapp','phone'],
+  email:        ['email','e-mail','mail'],
+  nascimento:   ['nascimento','data nascimento','data de nascimento','dt nasc','nasc'],
+  endereco:     ['endereço','endereco','end','logradouro','rua'],
+  profissao:    ['profissão','profissao','ocupação','ocupacao','cargo'],
+  estado_civil: ['estado civil','estadocivil','civil'],
+};
+
+function detectCliCol(headers, field) {
+  const aliases = CLI_ALIASES[field];
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i].toLowerCase().trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9 /]/g,'');
+    for (const alias of aliases) {
+      const a = alias.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 /]/g,'');
+      if (h === a || h.includes(a) || a.includes(h)) return i;
+    }
+  }
+  return -1;
+}
+
+function handleImportCliFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => parseCSVCli(e.target.result, file.name);
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSVCli(text, filename) {
+  const firstLine = text.split('\n')[0];
+  const delim = firstLine.includes(';') ? ';' : ',';
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) { showToast('Arquivo vazio ou inválido'); return; }
+  cliHeaders = lines[0].split(delim).map(h => h.replace(/"/g,'').trim());
+  cliRows = lines.slice(1).map(line => {
+    const cols = line.split(delim).map(c => c.replace(/"/g,'').trim());
+    const row = {};
+    cliHeaders.forEach((h, i) => row[h] = cols[i] || '');
+    return row;
+  }).filter(r => Object.values(r).some(v => v));
+
+  cliMapping = {};
+  Object.keys(CLI_ALIASES).forEach(field => {
+    const idx = detectCliCol(cliHeaders, field);
+    cliMapping[field] = idx >= 0 ? cliHeaders[idx] : '';
+  });
+
+  // Show step 2
+  document.getElementById('cliStep1').style.display = 'none';
+  document.getElementById('cliStep2').style.display = '';
+  document.getElementById('btnCliConfirm').style.display = '';
+  document.getElementById('cliFileInfo').textContent = '👥 ' + filename + ' — ' + cliRows.length + ' registros encontrados';
+
+  const CLI_FIELDS = [
+    { key:'cpf',          label:'CPF / CNPJ',        required:false },
+    { key:'nome',         label:'Nome completo',      required:true  },
+    { key:'telefone',     label:'Telefone / Celular', required:false },
+    { key:'email',        label:'E-mail',             required:false },
+    { key:'nascimento',   label:'Data de nascimento', required:false },
+    { key:'endereco',     label:'Endereço',           required:false },
+    { key:'profissao',    label:'Profissão',          required:false },
+    { key:'estado_civil', label:'Estado civil',       required:false },
+  ];
+
+  const example = cliRows[0] || {};
+  document.getElementById('cliMappingBody').innerHTML = CLI_FIELDS.map(f => {
+    const opts = ['', ...cliHeaders].map(h =>
+      '<option value="' + h + '" ' + (cliMapping[f.key] === h ? 'selected' : '') + '>' + (h || '— Não importar —') + '</option>'
+    ).join('');
+    const exVal = cliMapping[f.key] ? (example[cliMapping[f.key]] || '') : '';
+    return '<tr style="border-bottom:1px solid var(--border)">' +
+      '<td style="padding:8px 10px;font-weight:500">' + f.label + (f.required ? '<span style="color:var(--red)"> *</span>' : '') + '</td>' +
+      '<td style="padding:6px 10px"><select onchange="cliMapping['' + f.key + '']=this.value;document.getElementById('cex_' + f.key + '').textContent=this.value?(cliRows[0]||{})[this.value]||'':'';" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:13px;font-family:inherit">' + opts + '</select></td>' +
+      '<td style="padding:8px 10px;font-size:12px;color:var(--text3);font-family:monospace" id="cex_' + f.key + '">' + exVal + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function parseDateBR(str) {
+  if (!str) return null;
+  str = str.trim();
+  if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(str)) {
+    const [d,m,y] = str.split('/');
+    return (y.length===2?'20'+y:y) + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0');
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  return null;
+}
+
+async function confirmImportCli() {
+  if (!cliMapping.nome) { showToast('Mapeie pelo menos o campo Nome'); return; }
+  const btn = document.getElementById('btnCliConfirm');
+  btn.disabled = true; btn.textContent = 'Importando...';
+
+  let criados = 0, atualizados = 0, erros = 0;
+
+  for (const row of cliRows) {
+    try {
+      const nome = (row[cliMapping.nome] || '').trim();
+      if (!nome) continue;
+      const cpf = cliMapping.cpf ? row[cliMapping.cpf].replace(/[^\d]/g,'') : '';
+      const payload = {
+        nome,
+        documento: cpf || null,
+        telefone:    cliMapping.telefone     ? row[cliMapping.telefone]?.trim()    : '',
+        email:       cliMapping.email        ? row[cliMapping.email]?.trim()       : '',
+        nascimento:  cliMapping.nascimento   ? parseDateBR(row[cliMapping.nascimento]) : null,
+        endereco:    cliMapping.endereco     ? row[cliMapping.endereco]?.trim()    : '',
+        profissao:   cliMapping.profissao    ? row[cliMapping.profissao]?.trim()   : '',
+        estado_civil:cliMapping.estado_civil ? row[cliMapping.estado_civil]?.trim(): '',
+        corretor_id: currentProfile.id,
+      };
+
+      // Check duplicate by CPF or name
+      let existing = null;
+      if (cpf) existing = clientes.find(c => (c.documento||'').replace(/[^\d]/g,'') === cpf && cpf.length > 5);
+      if (!existing) existing = clientes.find(c => c.nome.toLowerCase().trim() === nome.toLowerCase().trim());
+
+      if (existing) {
+        if (!DEMO_MODE) await sb.from('clientes').update(payload).eq('id', existing.id);
+        Object.assign(existing, payload);
+        atualizados++;
+      } else {
+        payload.created_at = new Date().toISOString();
+        if (DEMO_MODE) { payload.id = 'c_' + Date.now() + '_' + criados; clientes.push({...payload}); }
+        else { const { data } = await sb.from('clientes').insert(payload).select().single(); if (data) clientes.push(data); }
+        criados++;
+      }
+    } catch(e) { erros++; }
+  }
+
+  document.getElementById('cliStep2').style.display = 'none';
+  document.getElementById('cliStep3').style.display = '';
+  document.getElementById('cliResult3').innerHTML =
+    '<div style="text-align:center;padding:16px 0">' +
+    '<div style="font-size:40px;margin-bottom:12px">✅</div>' +
+    '<div style="font-size:18px;font-weight:600;margin-bottom:16px">Importação concluída!</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">' +
+    '<div style="background:var(--accent-bg);border-radius:var(--r-sm);padding:12px"><div style="font-size:24px;font-weight:600;color:var(--accent)">' + criados + '</div><div style="font-size:12px;color:var(--accent)">Criados</div></div>' +
+    '<div style="background:var(--blue-bg);border-radius:var(--r-sm);padding:12px"><div style="font-size:24px;font-weight:600;color:var(--blue)">' + atualizados + '</div><div style="font-size:12px;color:var(--blue)">Atualizados</div></div>' +
+    '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:12px"><div style="font-size:24px;font-weight:600;color:var(--text2)">' + erros + '</div><div style="font-size:12px;color:var(--text3)">Ignorados</div></div>' +
+    '</div>' +
+    '<div style="font-size:13px;color:var(--text2)">Próximo passo: importe as apólices para vincular aos clientes.</div>' +
+    '</div>';
+  document.getElementById('cliFooter').innerHTML =
+    '<button class="btn btn-primary" onclick="closeModal('modalImportClientes');resetImportCli();renderClients()">Concluir</button>';
+}
+
+function resetImportCli() {
+  cliRows = []; cliMapping = {}; cliHeaders = [];
+  document.getElementById('cliStep1').style.display = '';
+  document.getElementById('cliStep2').style.display = 'none';
+  document.getElementById('cliStep3').style.display = 'none';
+  document.getElementById('btnCliConfirm').style.display = 'none';
+  const fi = document.getElementById('cliFile'); if (fi) fi.value = '';
+  document.getElementById('cliFooter').innerHTML =
+    '<button class="btn btn-ghost" onclick="closeModal('modalImportClientes');resetImportCli()">Cancelar</button>' +
+    '<button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>';
+}
+
 </script>
+
+<!-- IMPORTAR CLIENTES -->
+<div class="overlay" id="modalImportClientes">
+<div class="modal modal-lg">
+  <div class="modal-head">
+    <div class="modal-title">Importar Clientes (CSV)</div>
+    <button class="modal-close" onclick="closeModal('modalImportClientes');resetImportCli()">✕</button>
+  </div>
+  <div id="cliStep1">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+      Importe sua planilha de clientes. O sistema detecta as colunas automaticamente e evita duplicatas pelo CPF.
+    </p>
+    <div class="drop-zone" onclick="document.getElementById('cliFile').click()" ondragover="event.preventDefault()">
+      <div style="font-size:32px;margin-bottom:8px">👥</div>
+      <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px">Clique para selecionar o arquivo</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Arquivo CSV exportado do Excel</div>
+      <input type="file" id="cliFile" accept=".csv" style="display:none" onchange="handleImportCliFile(this)"/>
+      <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();document.getElementById('cliFile').click()">Selecionar arquivo</button>
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--r-sm);padding:12px;font-size:12px;color:var(--text2)">
+      <strong>Colunas reconhecidas:</strong> CPF/CNPJ · Nome · Telefone · E-mail · Nascimento · Endereço · Profissão · Estado Civil
+    </div>
+  </div>
+  <div id="cliStep2" style="display:none">
+    <div style="font-size:14px;font-weight:600;margin-bottom:4px" id="cliFileInfo"></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Confirme o mapeamento das colunas:</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px">
+      <thead><tr style="background:var(--surface2)">
+        <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Campo</th>
+        <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Coluna do arquivo</th>
+        <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Exemplo</th>
+      </tr></thead>
+      <tbody id="cliMappingBody"></tbody>
+    </table>
+    <div style="background:var(--blue-bg);border:1px solid #b0c8f0;border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--blue)">
+      Clientes com CPF já cadastrado serão <strong>atualizados</strong>, não duplicados.
+    </div>
+  </div>
+  <div id="cliStep3" style="display:none">
+    <div id="cliResult3"></div>
+  </div>
+  <div class="modal-foot" id="cliFooter">
+    <button class="btn btn-ghost" onclick="closeModal('modalImportClientes');resetImportCli()">Cancelar</button>
+    <button class="btn btn-primary" id="btnCliConfirm" onclick="confirmImportCli()" style="display:none">Importar clientes</button>
+  </div>
+</div>
+</div>
 </body>
 </html>
